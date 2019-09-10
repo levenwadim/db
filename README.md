@@ -28,46 +28,62 @@ Mini ORM для Python 3
 # Примеры использования
 
 **Подключение к базе данных:**
+```python
 db = Db(host='127.0.0.1', user='root' name='database', passwd='123456')
+```
 Свойство echo=True - позволит видеть все осуществляемые запросы к базе данных
 
 
 **Создание модели таблицы базы данных:**
+```python
 TypeNotification = Model('type_notification', db, 
-	id = Column(Integer, primary_key=True),
-  	name = Column(String(255), nullable=False),
+  id = Column(Integer, primary_key=True),
+  name = Column(String(255), nullable=False),
 )
+```
 
 
 **Добавление статического метода в модель:**
+```python
 def func(x):
 	print(x)
 TypeNotification.add_staticmethod(func, 'func_name') # Если не указать название функции, возьмет название переданной функции
-
+```
 *Далее в коде*
+```python
 TypeNotification.func_name(2)
 TypeNotification().func_name(2) # Не сработает, так как вызывается уже не как статическая функция
-
+```
 
 **Добавление метода в модель:**
+```python
 def func(self, x):
 	print(self.name + x)
 TypeNotification.add_method(func, 'func_name') # Если не указать название функции, возьмет название переданной функции
-
+```
 *Далее в коде*
+```python
 TypeNotification(name='Man').func_name(2)
 TypeNotification.func_name(2) # Не сработает, так как вызывается как статическая функция
-
+```
 
 **Выборка всех строк в таблице:**
+```python
 Model.all()
+```
 **Выборка первой строки в таблице:**
+```python
 Model.first()
+```
 **Выборка строки по указанному при объявлении модели primary_key:**
+```python
 Model.get(значение_primary_key_поля)
+```
 
 **Фильтрация строк по указанным полям (условие AND) из таблицы:**
+```python
 Model.filter_by(поле1=значение1, поле2=значение2).нужная_выборка()
+```
 *Нужная выборка одна из списка ниже*
 - .all()
 - .first()
@@ -76,21 +92,30 @@ Model.filter_by(поле1=значение1, поле2=значение2).нуж
 
 
 **Получение кол-ва строк в таблице:**
+```python
 Model.count()
+```
 **Проверка наличие строк в таблице:**
+```python
 Model.exist()
-
+```
 
 **Добавление новой строки в таблицу:**
+```python
 Model(поле=значение).append()
+```
 
 **Обновление строки/строк в таблице:**
+```python
 object_of_model.update(поле1=значение1, поле2=значение) # Если не передан фильтр, в запросе будет использовать значение поля primary_key
 Model.filter_by(hide=YesNoEnum.y).update(hide=YesNoEnum.n)
+```
 
 **Удаление строки/строк из таблицы:**
+```python
 object_of_model.delete() # Если не передан фильтр, в запросе будет использовать значение поля primary_key
 Model.filter_by(hide=YesNoEnum.y).delete()
+```
 
 
 # Результаты запросов
