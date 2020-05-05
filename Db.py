@@ -1,3 +1,5 @@
+# Mini ORM/Data Mapper
+
 import time, copy, pymysql, types
 from datetime import datetime, date
 from decimal import Decimal, ROUND_HALF_UP
@@ -162,6 +164,9 @@ class Model(dict):
 
   # Получаем True/False о наличии строки
   def exist(self, **condition_attrs):
+    if condition_attrs.get('__condition') and ' LIMIT ' not in condition_attrs['__condition']:
+      condition_attrs['__condition'] += ' LIMIT 1;'
+      
     count = self.count(**condition_attrs)
     if count > 0:
       return True
@@ -356,6 +361,7 @@ class Model(dict):
   # Получаем объект запроса с условием согласно переданным полям
   def filter_by(self, **condition_attrs):
     query_list = []
+    limit_query = ''
     for key, value in condition_attrs.items():
       if key != 'orm' and key != 'limit':
         if type(value) is dict:
@@ -363,11 +369,14 @@ class Model(dict):
           query_list.append(self.quote_col(key) + ' ' + value_key + ' ' + self.quote_val(key, value[value_key]))
         else:
           query_list.append(self.quote_col(key) + ' = ' + self.quote_val(key, value))
+      elif key == 'limit':
+        limit_query += ' LIMIT ' + str(value)
 
     return Query(
       self, 
       ' WHERE ' +
-      ' AND '.join(query_list)
+      ' AND '.join(query_list) +
+      limit_query
     )
 
   # Получаем объект запроса с сортировкой согласно переданным полям
@@ -444,6 +453,7 @@ class Query:
   def order_by(self, **ordered_attrs):
     self.sql += self.model.order_by(**ordered_attrs).sql
     return self
+
 
 class Column:
   _value = None
