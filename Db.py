@@ -169,10 +169,7 @@ class Model(dict):
 
     # TODO Возможно делается count по всей таблице, вместо проверки наличия одной любой строки согласно __condition
     count = self.count(**condition_attrs)
-    if count > 0:
-      return True
-
-    return False
+    return count > 0
 
   # Получаем строку из базы данных по primary_key
   def get(self, primary_key_value, **fetch_attrs):
