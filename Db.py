@@ -344,6 +344,8 @@ class Model(dict):
       sql_condition = condition_attrs['__condition']
       del condition_attrs['__condition']
 
+    # TODO Добавить обработку LIMIT и OFFSET
+
     if sql_condition == '':
       sql_condition = self.generate_where_primary_key_sql()
 
