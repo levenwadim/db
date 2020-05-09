@@ -166,7 +166,8 @@ class Model(dict):
   def exist(self, **condition_attrs):
     if condition_attrs.get('__condition') and ' LIMIT ' not in condition_attrs['__condition']:
       condition_attrs['__condition'] += ' LIMIT 1;'
-      
+
+    # TODO Возможно делается count по всей таблице, вместо проверки наличия одной любой строки согласно __condition
     count = self.count(**condition_attrs)
     if count > 0:
       return True
