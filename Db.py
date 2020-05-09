@@ -190,14 +190,7 @@ class Model(dict):
     else:
       sql = self.__select_sql
 
-    primary_key_col = self.get_primary_col()
-    if primary_key_col is None:
-      raise Exception('Не было найдено primary_key поле')
-    sql += (
-      ' WHERE ' + 
-      self.quote_col(primary_key_col) 
-      + '=' + self.quote_val(primary_key_col, primary_key_value)
-      + ' LIMIT 1;')
+    sql += self.generate_where_primary_key_sql()
 
     conn = self.__db.connection()
     cur = self.__db.execute(sql, conn)
