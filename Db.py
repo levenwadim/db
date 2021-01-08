@@ -135,14 +135,18 @@ class Model(dict):
       ','.join([self.quote_col(key) for key in self.get_attr_list()]) + 
       ' FROM ' + self.quote_col(self.__tablename__))
   # Генерируем WHERE primary_key = "" LIMIT 1
-  def generate_where_primary_key_sql(self):
+  def generate_where_primary_key_sql(self, value=None):
     primary_key_col = self.get_primary_col()
     if primary_key_col is None:
       raise Exception('Не было найдено primary_key поле')
+
+    if value is None:
+      value = getattr(self, primary_key_col)
+
     return (
       ' WHERE ' + 
       self.quote_col(primary_key_col) 
-      + '=' + self.quote_val(primary_key_col, getattr(self, primary_key_col))
+      + '=' + self.quote_val(primary_key_col, value)
       + ' LIMIT 1;')
 
   # Получаем кол-во строк в таблице
@@ -190,7 +194,7 @@ class Model(dict):
     else:
       sql = self.__select_sql
 
-    sql += self.generate_where_primary_key_sql()
+    sql += self.generate_where_primary_key_sql(primary_key_value)
 
     conn = self.__db.connection()
     cur = self.__db.execute(sql, conn)
