@@ -3,7 +3,7 @@
 import time, copy, pymysql, types
 from datetime import datetime, date
 from decimal import Decimal, ROUND_HALF_UP
-from DBUtils.PooledDB import PooledDB
+from dbutils.pooled_db import PooledDB
 
 class Model(dict):
   __tablename__ = None
