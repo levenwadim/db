@@ -77,7 +77,7 @@ class Model(dict):
 
   def quote_col(self, name_col):
     return '`' + name_col + '`'
-  def quote_val(self, name_col, value):
+  def convert_val(self, name_col, value):
     attr = object.__getattribute__(self, name_col)
 
     attr_type = type(attr._type)
@@ -99,7 +99,7 @@ class Model(dict):
     elif attr_type is Date:
       value = value.strftime('%Y-%m-%d')
 
-    return '"' + pymysql.escape_string(str(value)) + '"'
+    return str(value)
 
   def get_attr_list(self):
     return [
@@ -127,6 +127,20 @@ class Model(dict):
 
     return res_list
 
+  @staticmethod
+  def get_sql_from_condition_attrs(condition_attrs):
+    sql_condition = ''
+    if condition_attrs.get('__condition'):
+      sql_condition = condition_attrs['__condition']
+      del condition_attrs['__condition']
+
+    sql_params_condition = []
+    if condition_attrs.get('__condition_params'):
+      sql_params_condition = condition_attrs['__condition_params']
+      del condition_attrs['__condition_params']
+
+    return (sql_condition, sql_params_condition)
+
 
   # Генерируем SELECT запрос
   def generate_select_sql(self):
@@ -144,20 +158,21 @@ class Model(dict):
       value = getattr(self, primary_key_col)
 
     return (
-      ' WHERE ' + 
-      self.quote_col(primary_key_col) 
-      + '=' + self.quote_val(primary_key_col, value)
-      + ' LIMIT 1;')
+      ' WHERE ' +
+      self.quote_col(primary_key_col)
+      + '= %s LIMIT 1;',
+      [
+        self.convert_val(primary_key_col, value),
+      ],
+    )
 
   # Получаем кол-во строк в таблице
   def count(self, **condition_attrs):
-    sql_condition = ''
-    if condition_attrs.get('__condition'):
-      sql_condition = condition_attrs['__condition']
-      del condition_attrs['__condition']
+    sql_condition, sql_params_condition = Model.get_sql_from_condition_attrs(condition_attrs)
 
     conn = self.__db.connection()
-    cur = self.__db.execute('SELECT COUNT(1) FROM ' + self.quote_col(self.__tablename__) + sql_condition, conn)
+    cur = self.__db.execute('SELECT COUNT(1) FROM ' + self.quote_col(self.__tablename__) + sql_condition, conn,
+                            sql_params_condition)
 
     res = cur.fetchone()
 
@@ -194,10 +209,11 @@ class Model(dict):
     else:
       sql = self.__select_sql
 
-    sql += self.generate_where_primary_key_sql(primary_key_value)
+    sql_condition, sql_params = self.generate_where_primary_key_sql(primary_key_value)
+    sql += sql_condition
 
     conn = self.__db.connection()
-    cur = self.__db.execute(sql, conn)
+    cur = self.__db.execute(sql, conn, sql_params)
     
     res = cur.fetchone()
 
@@ -216,34 +232,31 @@ class Model(dict):
     return res
 
   # Получаем первую строку в таблице
-  def first(self, **fetch_attrs):
+  def first(self, **condition_attrs):
     if self.__select_sql == '':
       self.generate_select_sql()
 
     orm = False
-    if fetch_attrs.get('orm') is not None:
-      orm = fetch_attrs['orm']
-      del fetch_attrs['orm']
+    if condition_attrs.get('orm') is not None:
+      orm = condition_attrs['orm']
+      del condition_attrs['orm']
 
-    sql_condition = ''
-    if fetch_attrs.get('__condition'):
-      sql_condition = fetch_attrs['__condition']
-      del fetch_attrs['__condition']
+    sql_condition, sql_params_condition = Model.get_sql_from_condition_attrs(condition_attrs)
 
     sql_condition += ' LIMIT 1'
 
     conn = self.__db.connection()
     
-    if len(fetch_attrs) > 0:
+    if len(condition_attrs) > 0:
       sql = (
         'SELECT ' + 
-        ','.join([self.quote_col(key) for key, value in fetch_attrs.items() if key != 'orm' and key != '__condition']) + 
+        ','.join([self.quote_col(key) for key, value in condition_attrs.items() if key != 'orm' and key != '__condition']) +
         ' FROM ' + self.quote_col(self.__tablename__)
       )
 
-      cur = self.__db.execute(sql + sql_condition, conn)
+      cur = self.__db.execute(sql + sql_condition, conn, sql_params_condition)
     else:
-      cur = self.__db.execute(self.__select_sql + sql_condition, conn)
+      cur = self.__db.execute(self.__select_sql + sql_condition, conn, sql_params_condition)
     
     res = cur.fetchone()
 
@@ -262,43 +275,40 @@ class Model(dict):
     return res
 
   # Получаем все строки из таблицы
-  def all(self, **fetch_attrs):
+  def all(self, **condition_attrs):
     if self.__select_sql == '':
       self.generate_select_sql()
 
     orm = False
-    if fetch_attrs.get('orm') is not None:
-      orm = fetch_attrs['orm']
-      del fetch_attrs['orm']
+    if condition_attrs.get('orm') is not None:
+      orm = condition_attrs['orm']
+      del condition_attrs['orm']
 
-    sql_condition = ''
-    if fetch_attrs.get('__condition'):
-      sql_condition += fetch_attrs['__condition']
-      del fetch_attrs['__condition']
+    sql_condition, sql_params_condition = Model.get_sql_from_condition_attrs(condition_attrs)
 
-    if fetch_attrs.get('offset') is not None and fetch_attrs.get('limit') is not None:
-      sql_condition += ' LIMIT ' + str(fetch_attrs['offset']) + ',' + str(fetch_attrs['limit'])
-      del fetch_attrs['offset']
-      del fetch_attrs['limit']
+    if condition_attrs.get('offset') is not None and condition_attrs.get('limit') is not None:
+      sql_condition += ' LIMIT ' + str(condition_attrs['offset']) + ',' + str(condition_attrs['limit'])
+      del condition_attrs['offset']
+      del condition_attrs['limit']
 
-    if fetch_attrs.get('offset'):
+    if condition_attrs.get('offset'):
       raise Exception('Параметр offset не может передаваться без параметра limit')
 
-    if fetch_attrs.get('limit'):
-      sql_condition += ' LIMIT ' + str(fetch_attrs['limit'])
-      del fetch_attrs['limit']
+    if condition_attrs.get('limit'):
+      sql_condition += ' LIMIT ' + str(condition_attrs['limit'])
+      del condition_attrs['limit']
 
     conn = self.__db.connection()
-    if len(fetch_attrs) > 0:
+    if len(condition_attrs) > 0:
       sql = (
         'SELECT ' + 
-        ','.join([self.quote_col(key) for key, value in fetch_attrs.items() if key != 'orm' and key != '__condition']) + 
+        ','.join([self.quote_col(key) for key, value in condition_attrs.items() if key != 'orm' and key != '__condition']) +
         ' FROM ' + self.quote_col(self.__tablename__)
       )
 
-      cur = self.__db.execute(sql + sql_condition, conn)
+      cur = self.__db.execute(sql + sql_condition, conn, sql_params_condition)
     else:
-      cur = self.__db.execute(self.__select_sql + sql_condition, conn)
+      cur = self.__db.execute(self.__select_sql + sql_condition, conn, sql_params_condition)
     
     res = cur.fetchall()
 
@@ -322,50 +332,50 @@ class Model(dict):
     return res
 
   # Обновление строки/строк
-  def update(self, **upd_attrs):
-    sql_condition = ''
-    if upd_attrs.get('__condition'):
-      sql_condition = upd_attrs['__condition']
-      del upd_attrs['__condition']
+  def update(self, **condition_attrs):
+    sql_condition, sql_params_condition = Model.get_sql_from_condition_attrs(condition_attrs)
 
     sql = (
       'UPDATE ' + self.quote_col(self.__tablename__) + ' SET ' +
-      ','.join([self.quote_col(key) + '=' + self.quote_val(key, value) for key, value in upd_attrs.items()])
+      ','.join([self.quote_col(key) + '=%s' for key, value in condition_attrs.items()])
     )
 
+    sql_params = [self.convert_val(key, value) for key, value in condition_attrs.items()]
+
     if sql_condition == '':
-      sql_condition = self.generate_where_primary_key_sql()
+      sql_condition, sql_params_condition = self.generate_where_primary_key_sql()
 
-    self.__db.query(sql + sql_condition)
+    self.__db.query(sql + sql_condition, sql_params + sql_params_condition)
 
-    for key, value in upd_attrs.items():
+    for key, value in condition_attrs.items():
       setattr(self, key, value)
     
   # Удаление строки/строк
   def delete(self, **condition_attrs):
-    sql_condition = ''
-    if condition_attrs.get('__condition'):
-      sql_condition = condition_attrs['__condition']
-      del condition_attrs['__condition']
+    sql_condition, sql_params_condition = Model.get_sql_from_condition_attrs(condition_attrs)
 
     # TODO Добавить обработку LIMIT и OFFSET
 
     if sql_condition == '':
-      sql_condition = self.generate_where_primary_key_sql()
+      sql_condition, sql_params_condition = self.generate_where_primary_key_sql()
 
-    self.__db.query('DELETE FROM ' + self.quote_col(self.__tablename__) + sql_condition)
+    self.__db.query('DELETE FROM ' + self.quote_col(self.__tablename__) + sql_condition, sql_params_condition)
 
   # Получаем объект запроса с условием согласно переданным полям
   def filter_by(self, **condition_attrs):
     query_list = []
+    query_params_list = []
+
     limit_query = ''
     for key, value in condition_attrs.items():
       if key != 'orm' and key != 'limit':
         if type(value) is dict:
           value_key = list(value.keys())[0]
-          query_list.append(self.quote_col(key) + ' ' + value_key + ' ' + self.quote_val(key, value[value_key]))
+          query_list.append(self.quote_col(key) + ' ' + value_key + ' %s')
+          query_params_list.append(self.convert_val(key, value[value_key]))
         else:
-          query_list.append(self.quote_col(key) + ' = ' + self.quote_val(key, value))
+          query_list.append(self.quote_col(key) + ' = %s')
+          query_params_list.append(self.convert_val(key, value))
       elif key == 'limit':
         limit_query += ' LIMIT ' + str(value)
 
@@ -373,7 +383,8 @@ class Model(dict):
       self, 
       ' WHERE ' +
       ' AND '.join(query_list) +
-      limit_query
+      limit_query,
+      query_params_list
     )
 
   # Получаем объект запроса с сортировкой согласно переданным полям
@@ -400,10 +411,11 @@ class Model(dict):
       ') VALUES '
     )
 
-    sql += '(' + ','.join([self.quote_val(key, getattr(self, key)) for key in attr_list]) + ')'
+    sql_params = [self.convert_val(key, getattr(self, key)) for key in attr_list]
+    sql += '(' + ','.join(['%s' for _ in attr_list]) + ')'
 
     conn = self.__db.connection()
-    cur = self.__db.execute(sql, conn)
+    cur = self.__db.execute(sql, conn, sql_params)
     cur.close()
     conn.close()
     setattr(self, self.get_primary_col(), cur.lastrowid)
@@ -425,27 +437,28 @@ class Model(dict):
 
 
 class Query:
-  def __init__(self, model, sql):
+  def __init__(self, model, sql, sql_params=None):
     self.model = model
     self.sql = sql
+    self.sql_params = sql_params
 
   def all(self, **fetch_attrs):
-    return self.model.all(__condition=self.sql, **fetch_attrs)
+    return self.model.all(__condition=self.sql, __condition_params=self.sql_params, **fetch_attrs)
 
   def first(self, **fetch_attrs):
-    return self.model.first(__condition=self.sql, **fetch_attrs)
+    return self.model.first(__condition=self.sql, __condition_params=self.sql_params, **fetch_attrs)
 
   def count(self):
-    return self.model.count(__condition=self.sql)
+    return self.model.count(__condition=self.sql, __condition_params=self.sql_params)
 
   def exist(self):
-    return self.model.exist(__condition=self.sql)
+    return self.model.exist(__condition=self.sql, __condition_params=self.sql_params)
 
   def update(self, **upd_attrs):
-    return self.model.update(__condition=self.sql, **upd_attrs)
+    return self.model.update(__condition=self.sql, __condition_params=self.sql_params, **upd_attrs)
 
   def delete(self):
-    return self.model.delete(__condition=self.sql)
+    return self.model.delete(__condition=self.sql, __condition_params=self.sql_params)
 
   def order_by(self, **ordered_attrs):
     self.sql += self.model.order_by(**ordered_attrs).sql
@@ -524,16 +537,24 @@ class Db:
 
 
   # Выполнение запроса к бд и возвращение курсора
-  def query(self, sql):
+  def query(self, sql, params=None):
+    if params is None:
+      params = []
+    else:
+      params = tuple(params)
+
     conn = self.connection()
     cur = conn.cursor()
 
     # Вывод выполняемых запросов
     if self.echo:
-      print(datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f') + ' ' + sql)
+      print_sql = sql
+      if len(params) > 0:
+        print_sql = print_sql % params
+      print(datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f') + ' ' + print_sql)
 
     try:
-      cur.execute(sql)
+      cur.execute(sql, params)
       conn.commit()
     except Exception as e:
       cur.close()
@@ -545,15 +566,23 @@ class Db:
     return cur
 
   # Выполнение запрос к бд по переданному соединению (переданное соединение необходимо закрывать вне этой функции)
-  def execute(self, sql, conn):
+  def execute(self, sql, conn, params=None):
+    if params is None:
+      params = []
+    else:
+      params = tuple(params)
+
     cur = conn.cursor()
 
     # Вывод выполняемых запросов
     if self.echo:
-      print(datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f') + ' ' + sql)
+      print_sql = sql
+      if len(params) > 0:
+        print_sql = print_sql % params
+      print(datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f') + ' ' + print_sql)
 
     try:
-      cur.execute(sql)
+      cur.execute(sql, params)
       conn.commit()
     except Exception as e:
       cur.close()
