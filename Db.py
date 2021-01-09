@@ -418,7 +418,10 @@ class Model(dict):
     cur = self.__db.execute(sql, conn, sql_params)
     cur.close()
     conn.close()
-    setattr(self, self.get_primary_col(), cur.lastrowid)
+
+    primary_key_col = self.get_primary_col()
+    if primary_key_col is not None:
+      setattr(self, primary_key_col, cur.lastrowid)
 
   # Добавляем метод объекта
   def add_method(self, func, func_name=None):
