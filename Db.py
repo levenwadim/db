@@ -37,7 +37,7 @@ class Model(dict):
         attr = object.__getattribute__(self.__dump, key)
         object.__setattr__(dump, key, copy.deepcopy(attr))
 
-        if type(attr._default) is types.LambdaType:
+        if not callable(attr) and type(attr._default) is types.LambdaType:
           object.__getattribute__(dump, key)._value = attr._default()
 
     for key, value in args.items():
@@ -437,6 +437,7 @@ class Model(dict):
       func_name = func.__name__
 
     object.__setattr__(self, func_name, func)
+    object.__setattr__(self.__dump, func_name, func)
 
 
 class Query:
